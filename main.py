@@ -32,6 +32,11 @@ def build_code_generation_prompt(task_yaml, parent_folder='.'):
     task_json = yaml_to_json(task_yaml)
     
     prompt = f"""
+IMPORTANT INSTRUCTIONS FOR CODE GENERATION:
+- The path will be the absolute path to the folder containing task.yaml, the data folder, and any additional files or folders. Use this path as the root for all file and folder access. Do not assume a subfolder unless it is specified in task.yaml.
+- The dataset may have a specific folder hierarchy (e.g., subfolders for classes, speakers, or other groupings). DO NOT simply process all files in the root folder. Instead, process files and folders according to the structure and requirements described in task.yaml (for example, only use files in certain subfolders, or follow the class/subclass structure as described).
+- If the path does not exist, show an error message in the UI.
+
 Generate a complete, production-ready Streamlit application based on these requirements:
 
 TASK CONFIGURATION (JSON):

@@ -5,6 +5,8 @@ import tempfile
 import main
 import sys
 import io
+import shutil
+import hashlib
 
 # --- App Configuration ---
 st.set_page_config(
@@ -26,7 +28,26 @@ if 'app_state' not in st.session_state:
 def switch_view(view_name):
     """Function to switch the internal view."""
     st.session_state.app_state['view'] = view_name
-    st.rerun()
+    # Only set should_rerun if not already set, to avoid double rerun
+    if not st.session_state.get('should_rerun', False):
+        st.session_state['should_rerun'] = True
+
+def cleanup_sample_folder():
+    # Remove the extracted sample folder if it exists in session state
+    sample_folder = st.session_state.app_state.get('sample_folder_path')
+    if sample_folder and os.path.exists(sample_folder):
+        try:
+            shutil.rmtree(sample_folder)
+        except Exception as e:
+            print(f"Error deleting sample folder: {e}")
+        st.session_state.app_state['sample_folder_path'] = None
+
+def get_file_hash(uploaded_file):
+    # Compute a hash of the uploaded file's content
+    uploaded_file.seek(0)
+    file_bytes = uploaded_file.read()
+    uploaded_file.seek(0)
+    return hashlib.sha256(file_bytes).hexdigest()
 
 # --- Main App Logic ---
 
@@ -37,12 +58,12 @@ current_view = st.session_state.app_state['view']
 # VIEW 1: The Uploader Interface
 # ==============================================================================
 if current_view == "uploader":
+    # Clean up any previous sample folder if a new file is uploaded
     st.header("\U0001F4E4 Upload your Dataset (.zip)")
     
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.subheader("\U0001F4C2 Upload your Dataset Bundle (.zip only)")
         st.markdown("""
         **Instructions:**
         - Upload a single .zip file containing everything needed for your task:
@@ -63,6 +84,7 @@ if current_view == "uploader":
         task_yaml = None
         abs_task_yaml_path = None
         abs_paths_info = {}
+        current_file_hash = None
         if task_bundle_zip is not None:
             import zipfile
             import tempfile
@@ -113,7 +135,13 @@ if current_view == "uploader":
                 st.session_state.app_state['abs_paths_info'] = abs_paths_info
                 st.session_state.app_state['data_path'] = task_yaml_path[:-10]
             else:
-                st.error("No task.yaml found in the uploaded zip. Please include it at the correct location.")
+                # Reuse previous extraction
+                extract_dir = prev_sample_folder
+                task_yaml_path = st.session_state.app_state.get('task_yaml_path')
+                task_yaml = st.session_state.app_state.get('task_yaml')
+                abs_task_yaml_path = st.session_state.app_state.get('task_yaml_path')
+                extracted_files = st.session_state.app_state.get('extracted_files', [])
+                abs_paths_info = st.session_state.app_state.get('abs_paths_info', {})
 
     with col2:
         st.markdown("**Supported format:**")
@@ -194,3 +222,9 @@ elif current_view == "generated_app":
     else:
         st.error("No generated code found.")
         st.button("Go back to uploader", on_click=switch_view, args=('uploader',))
+
+# At the end of the main script, after all UI logic:
+if st.session_state.get('should_rerun', False):
+    st.session_state['should_rerun'] = False
+    print("Triggering rerun...")
+    st.rerun()
