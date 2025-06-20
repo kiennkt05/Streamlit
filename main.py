@@ -26,6 +26,11 @@ def build_code_generation_prompt(task_yaml, parent_folder='.'):
     dataset_path = task_yaml.get('dataset_description', {}).get('data_path', './data')
     output_type = task_yaml.get('model_information', {}).get('output_format', {}).get('type', 'unknown')
     input_keys = list(task_yaml['model_information']['input_format']['structure'].keys())
+
+    # Feed previous attempt for better performance
+    previous_code = task_yaml.get('previous_attempt', {}).get('code',{})
+    previous_feedback = task_yaml.get('previous_attempt', {}).get('feedback',{})
+
     first_key = input_keys[0] if input_keys else 'data'
     
     # Convert YAML to JSON for better LLM understanding
@@ -47,6 +52,7 @@ TECHNICAL SPECS:
 - Dataset Path: {dataset_path}
 - Output Format: {output_type}
 - Parent Folder: {parent_folder}, include task.yaml, data (model input), and other addtional config file (.json, ...)
+- Previous Attempt: {previous_code, previous_feedback}
 - Do not join the env.env file
 
 CRITICAL PATH REQUIREMENTS:

@@ -186,18 +186,40 @@ elif current_view == "generated_app":
     st.sidebar.button("⬅️ Back to Uploader", on_click=switch_view, args=('uploader',))
 
     if st.sidebar.button("🔄 Regenerate UI"):
-        # Use the directory containing the task.yaml, not the file itself
-        task_yaml_file_to_use = st.session_state.app_state.get('data_path')
+        # Use the path to the current task.yaml
+        parent_path = st.session_state.app_state.get('data_path')
+        task_yaml_file_to_use = os.path.join(parent_path, 'task.yaml')
 
-        st.info(f"Regenerating from: {task_yaml_file_to_use}") # Debug print
+        current_code = st.session_state.app_state.get('generated_code', '')
+        current_error = st.session_state.app_state.get('last_error', '')
+        # print("current error: ", current_error)
+
+        # Update task.yaml with previous_attempt
+        import yaml as pyyaml
+        if task_yaml_file_to_use and os.path.isfile(task_yaml_file_to_use):
+            try:
+                with open(task_yaml_file_to_use, 'r', encoding='utf-8') as f:
+                    task_yaml_data = pyyaml.safe_load(f)
+                if 'previous_attempt' not in task_yaml_data:
+                    task_yaml_data['previous_attempt'] = {}
+                task_yaml_data['previous_attempt']['code'] = current_code
+                task_yaml_data['previous_attempt']['feedback'] = current_error
+                with open(task_yaml_file_to_use, 'w', encoding='utf-8') as f:
+                    pyyaml.dump(task_yaml_data, f, allow_unicode=True)
+            except Exception as e:
+                st.warning(f"Could not update previous_attempt in task.yaml: {e}")
+
+        st.info(f"Regenerating from: {parent_path}") # Debug print
         with st.spinner("Regenerating UI... This may take a moment."):
             try:
                 # Re-run the generation process
-                new_generated_code = main.main(task_yaml_file_to_use)
+                new_generated_code = main.main(parent_path)
                 st.session_state.app_state['generated_code'] = new_generated_code
+                st.session_state.app_state['last_error'] = ''
                 # Trigger a rerun to display the newly generated UI
                 st.session_state['should_rerun'] = True
             except Exception as e:
+                st.session_state.app_state['last_error'] = str(e)
                 st.error(f"❌ An error occurred during regeneration: {e}")
 
     st.sidebar.markdown("---")
@@ -232,6 +254,9 @@ elif current_view == "generated_app":
                 namespace['main']()
             
         except Exception as e:
+            # Keep track of errors
+            print(f"{e}")
+            st.session_state.app_state['last_error'] = str(e)
             st.error(f"❌ An error occurred while running the generated code: {e}")
             st.code(generated_code, language='python')
     else:
