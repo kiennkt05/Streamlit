@@ -1,5 +1,6 @@
 import openai
 import yaml
+import json
 import os
 from dotenv import load_dotenv
 os.environ.pop("SSL_CERT_FILE", None)
@@ -14,67 +15,40 @@ def read_task_yaml(path):
     with open(path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
     
-def extract_task_information(task_yaml):
-    """Step 1: Let LLM read and extract all important information from task.yaml"""
-    extraction_prompt = f"""
-Analyze this YAML configuration and extract key information for Streamlit application development:
+def yaml_to_json(task_yaml):
+    """Convert YAML data to JSON format for easier processing"""
+    return json.dumps(task_yaml, indent=2)
 
-YAML Content:
-{yaml.dump(task_yaml, default_flow_style=False)}
-
-Extract and organize:
-
-1. **CORE FUNCTIONALITY**:
-   - Task type and main purpose
-   - Input/output requirements and formats
-   - Data processing workflow
-
-2. **API INTEGRATION**:
-   - API endpoint and authentication
-   - Request payload structure (field names only, not descriptions)
-   - Response format and data extraction method
-   - Required data preprocessing/encoding
-
-3. **UI REQUIREMENTS**:
-   - Input methods (upload, text, dropdowns)
-   - Display components (tables, charts, images)
-   - Layout and interaction elements
-
-4. **TECHNICAL SPECS**:
-   - File format support
-   - Performance constraints
-   - Required libraries
-
-Return as structured JSON-like format for code generation.
-"""
-    
-    response = client.chat.completions.create(
-        model="gpt-4.1-nano-2025-04-14",
-        messages=[{"role": "user", "content": extraction_prompt}]
-    )
-    
-    extracted_info = response.choices[0].message.content
-    print("✅ Step 1: Task information extracted")
-    return extracted_info
-
-def build_code_generation_prompt(extracted_info, task_yaml):
-    """Step 2: Create comprehensive prompt for code generation using extracted information"""
+def build_code_generation_prompt(task_yaml, parent_folder='.'):
+    """Step 2: Create comprehensive prompt for code generation using task configuration"""
     # Get specific technical details
     api_url = task_yaml.get('model_information', {}).get('api_url', 'API_URL_NOT_SPECIFIED')
     dataset_path = task_yaml.get('dataset_description', {}).get('data_path', './data')
     output_type = task_yaml.get('model_information', {}).get('output_format', {}).get('type', 'unknown')
     input_keys = list(task_yaml['model_information']['input_format']['structure'].keys())
     first_key = input_keys[0] if input_keys else 'data'
+    
+    # Convert YAML to JSON for better LLM understanding
+    task_json = yaml_to_json(task_yaml)
+    
     prompt = f"""
 Generate a complete, production-ready Streamlit application based on these requirements:
 
-REQUIREMENTS:
-{extracted_info}
+TASK CONFIGURATION (JSON):
+{task_json}
 
 TECHNICAL SPECS:
 - API Endpoint: {api_url}
 - Dataset Path: {dataset_path}
 - Output Format: {output_type}
+- Parent Folder: {parent_folder}, include task.yaml, data (model input), and other addtional config file (.json, ...)
+- Do not join the env.env file
+
+CRITICAL PATH REQUIREMENTS:
+- All file paths should be relative to the parent folder: {parent_folder}
+- Data files should be accessed from: {os.path.join(parent_folder, 'data') if dataset_path == './data' else dataset_path}
+- Environment files should be loaded from: {os.path.join(parent_folder, 'env.env')}
+- Configuration files should be read from the parent folder context
 
 CRITICAL API RULES:
 1. Payload structure: Use only {input_keys} as keys, not descriptions
@@ -110,12 +84,13 @@ Generate the complete Python code now.
 """
     return prompt
 
-def build_review_prompt(generated_code, task_yaml):
+def build_review_prompt(generated_code, task_yaml, parent_folder='.'):
     """Step 3: Create prompt for final code review and bug fixing"""
     api_url = task_yaml.get('model_information', {}).get('api_url', 'API_URL_NOT_SPECIFIED')
     output_type = task_yaml.get('model_information', {}).get('output_format', {}).get('type', 'unknown')
     input_keys = list(task_yaml['model_information']['input_format']['structure'].keys())
     first_key = input_keys[0] if input_keys else 'data'
+    dataset_path = task_yaml.get('dataset_description', {}).get('data_path', './data')
     review_prompt = f"""
 Review this generated Streamlit code and fix ALL bugs/issues:
 
@@ -127,6 +102,14 @@ GENERATED CODE:
 CONTEXT: 
 - API Endpoint: {api_url}
 - Output Format: {output_type}
+- Parent Folder: {parent_folder}
+- Dataset Path: {dataset_path}
+
+CRITICAL PATH CHECKS:
+- Verify all file paths are correctly constructed relative to parent folder: {parent_folder}
+- Data files should be accessed from: {os.path.join(parent_folder, 'data') if dataset_path == './data' else dataset_path}
+- Environment files should be loaded from: {os.path.join(parent_folder, 'env.env')}
+- Ensure proper path handling across different operating systems
 
 CRITICAL CHECKS:
 1. **API Integration**: 
@@ -137,13 +120,16 @@ CRITICAL CHECKS:
         - Make sure the results is {output_type} format
    - Proper error handling for API calls
 
-2. **Code Quality**:
-   - All imports present and correct (io, sys, ..., all used lib must be include)
-   - Verify the validity of all use function from external library, some maybe deprecated or remove
-   - No syntax errors or undefined variables
+2. **Code Quality & Syntax**:
+   - CRITICAL: Check for ALL syntax errors (indentation, brackets, quotes, colons, etc.)
+   - Verify ALL imports are present and correct (io, sys, os, json, pandas, streamlit, requests, etc.)
+   - Verify the validity of all functions from external libraries - some may be deprecated or removed
+   - Check for undefined variables, functions, or methods
+   - Ensure proper variable naming and scope
+   - Validate all function calls and method invocations
    - Proper Streamlit components and caching
-   - User-friendly error messages
-   - Input validation
+   - User-friendly error messages and input validation
+   - Fix any Python syntax issues that would prevent execution
 
 3. **Streamlit Best Practices**:
    - Fix any deprecated Streamlit parameters or methods
@@ -154,36 +140,40 @@ CRITICAL CHECKS:
    - File handling and data processing
    - UI components work correctly
 
-OUTPUT:
+OUTPUT REQUIREMENTS:
 - If perfect: Return exactly "CODE_APPROVED"
-- If issues found: Return complete corrected code (no explanations)
+- If issues found: Return ONLY the complete corrected Python code
+- NO markdown formatting (```, ```python, etc.)
+- NO explanations, comments about fixes, or descriptions
+- NO code block markers or language indicators
+- The output must be clean, executable Python code that can be directly saved to a .py file
+- Ensure the code is syntactically correct and will run without Python errors
 """
     return review_prompt
 
-def main(task_yaml_path='task.yaml'):
+def main(parent_folder='.'):
     print("🚀 Starting Multi-Stage Code Generation Pipeline...")
+    
+    # Construct task YAML path from parent folder
+    task_yaml_path = os.path.join(parent_folder, 'task.yaml')
     
     # Load task configuration
     task_yaml = read_task_yaml(task_yaml_path)
     output_type = task_yaml['model_information']['output_format']['type']
     print("📖 Task YAML loaded successfully")
     
-    # Stage 1: Extract task information
-    print("\n📋 Stage 1: Extracting task information...")
-    extracted_info = extract_task_information(task_yaml)
-    
-    # Stage 2: Generate code using extracted information
-    print("\n🔨 Stage 2: Generating Streamlit application code...")
-    code_prompt = build_code_generation_prompt(extracted_info, task_yaml)
+    # Stage 1: Generate code using task configuration
+    print("\n🔨 Stage 1: Generating Streamlit application code...")
+    code_prompt = build_code_generation_prompt(task_yaml, parent_folder)
     generated_code = call_llm(code_prompt)
     
     if generated_code is None:
         print("❌ Failed to generate code")
         return None
     
-    # Stage 3: Review and fix the generated code
-    print("\n🔍 Stage 3: Reviewing and fixing generated code...")
-    review_prompt = build_review_prompt(generated_code, task_yaml)
+    # Stage 2: Review and fix the generated code
+    print("\n🔍 Stage 2: Reviewing and fixing generated code...")
+    review_prompt = build_review_prompt(generated_code, task_yaml, parent_folder)
     reviewed_code = call_llm(review_prompt)
     
     if reviewed_code is None:
@@ -196,8 +186,7 @@ def main(task_yaml_path='task.yaml'):
             final_code = generated_code
         else:
             print("🔧 Code issues found and fixed")
-            final_code = reviewed_code
-    
+            final_code = reviewed_code    
     # Clean markdown markers if present
     final_code = clean_generated_code_str(final_code)
     print("\n🎉 Pipeline completed successfully!")

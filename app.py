@@ -111,6 +111,7 @@ if current_view == "uploader":
                 st.session_state.app_state['extract_dir'] = extract_dir
                 st.session_state.app_state['extracted_files'] = extracted_files
                 st.session_state.app_state['abs_paths_info'] = abs_paths_info
+                st.session_state.app_state['data_path'] = task_yaml_path[:-10]
             else:
                 st.error("No task.yaml found in the uploaded zip. Please include it at the correct location.")
 
@@ -129,9 +130,7 @@ if current_view == "uploader":
             if task_yaml_path:
                 st.markdown(f"**Detected task.yaml:** `{task_yaml_path}`")
             if abs_paths_info:
-                st.markdown("**Absolute dataset paths used:**")
-                for k, v in abs_paths_info.items():
-                    st.markdown(f"- `{k}`: `{v}`")
+                st.markdown(f"**Absolute dataset paths used:** `{st.session_state.app_state['data_path']}`")
         else:
             st.markdown("• No bundle zip uploaded yet")
 
@@ -143,7 +142,7 @@ if current_view == "uploader":
             with st.spinner("Generating UI Code... This may take a moment."):
                 try:
                     # Use the extracted (and possibly updated) task.yaml for code generation
-                    generated_code_string = main.main(st.session_state.app_state['task_yaml_path'])
+                    generated_code_string = main.main(st.session_state.app_state['data_path'])
                     # Store the generated code in session state
                     st.session_state.app_state['generated_code'] = generated_code_string
                     # Switch to the 'generated_app' view
@@ -185,6 +184,9 @@ elif current_view == "generated_app":
             }
             # Execute the generated code within the prepared namespace
             exec(generated_code, namespace)
+            # If a main() function is defined, call it to ensure UI is rendered
+            if 'main' in namespace and callable(namespace['main']):
+                namespace['main']()
             
         except Exception as e:
             st.error(f"❌ An error occurred while running the generated code: {e}")
