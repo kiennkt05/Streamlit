@@ -184,6 +184,22 @@ if current_view == "uploader":
 # ==============================================================================
 elif current_view == "generated_app":
     st.sidebar.button("⬅️ Back to Uploader", on_click=switch_view, args=('uploader',))
+
+    if st.sidebar.button("🔄 Regenerate UI"):
+        # Use the directory containing the task.yaml, not the file itself
+        task_yaml_file_to_use = st.session_state.app_state.get('data_path')
+
+        st.info(f"Regenerating from: {task_yaml_file_to_use}") # Debug print
+        with st.spinner("Regenerating UI... This may take a moment."):
+            try:
+                # Re-run the generation process
+                new_generated_code = main.main(task_yaml_file_to_use)
+                st.session_state.app_state['generated_code'] = new_generated_code
+                # Trigger a rerun to display the newly generated UI
+                st.session_state['should_rerun'] = True
+            except Exception as e:
+                st.error(f"❌ An error occurred during regeneration: {e}")
+
     st.sidebar.markdown("---")
     
     generated_code = st.session_state.app_state.get('generated_code')
