@@ -1,0 +1,8 @@
+streamlit
+requests
+pandas
+numpy
+pillow
+openai
+pyyaml
+dotenv
