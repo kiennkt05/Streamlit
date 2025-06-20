@@ -27,6 +27,10 @@ if 'app_state' not in st.session_state:
 # --- Helper Functions ---
 def switch_view(view_name):
     """Function to switch the internal view."""
+    # Clean up the sample folder if going back to the uploader
+    if view_name == 'uploader':
+        cleanup_sample_folder()
+    
     st.session_state.app_state['view'] = view_name
     # Only set should_rerun if not already set, to avoid double rerun
     if not st.session_state.get('should_rerun', False):
@@ -120,11 +124,15 @@ if current_view == "uploader":
                     st.session_state.app_state['sample_folder_path'] = sample_folder
                     dataset_desc = task_yaml.get('dataset_description', {})
                     updated = False
+                    abs_paths_info = {} # Reset to ensure it's clean for this run
                     for key in ['data_path', 'data_source']:
                         if key in dataset_desc:
+                            # This is the absolute path to the sample folder
                             abs_path = sample_folder
+                            # Update the YAML for the LLM
                             dataset_desc[key] = abs_path
-                            abs_paths_info[key] = abs_path
+                            # Use a clear key for UI display
+                            abs_paths_info['absolute_path'] = abs_path
                             updated = True
                     if updated:
                         # Write a new task.yaml with updated paths
@@ -225,7 +233,6 @@ elif current_view == "generated_app":
             # If a main() function is defined, call it to ensure UI is rendered
             if 'main' in namespace and callable(namespace['main']):
                 namespace['main']()
-            print("Code executed")
             
         except Exception as e:
             st.error(f"❌ An error occurred while running the generated code: {e}")

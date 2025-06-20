@@ -61,14 +61,16 @@ def build_code_generation_prompt(extracted_info, task_yaml):
     """Step 2: Create comprehensive prompt for code generation using extracted information"""
     # Get specific technical details
     api_url = task_yaml.get('model_information', {}).get('api_url', 'API_URL_NOT_SPECIFIED')
-    dataset_path = task_yaml.get('dataset_description', {}).get('data_path', './data')
+    sample_path = task_yaml.get('dataset_description', {}).get('data_path', './data')
     output_type = task_yaml.get('model_information', {}).get('output_format', {}).get('type', 'unknown')
     input_keys = list(task_yaml['model_information']['input_format']['structure'].keys())
     first_key = input_keys[0] if input_keys else 'data'
+    print(sample_path)
     prompt = f"""
 IMPORTANT INSTRUCTIONS FOR CODE GENERATION:
 - The path will be the absolute path to the folder containing task.yaml, the data folder, and any additional files or folders. Use this path as the root for all file and folder access. Do not assume a subfolder unless it is specified in task.yaml.
 - The dataset may have a specific folder hierarchy (e.g., subfolders for classes, speakers, or other groupings). DO NOT simply process all files in the root folder. Instead, process files and folders according to the structure and requirements described in task.yaml (for example, only use files in certain subfolders, or follow the class/subclass structure as described).
+- Add an option (e.g., a button or checkbox) to allow the user to run task and see results for the samples in data_source/data_path if provided. If this option is selected, process and display results for the sample data.
 - If the path does not exist, show an error message in the UI.
 
 Generate a complete, production-ready Streamlit application based on these requirements:
@@ -78,7 +80,7 @@ REQUIREMENTS:
 
 TECHNICAL SPECS:
 - API Endpoint: {api_url}
-- Dataset Path: {dataset_path}
+- Sample Path: {sample_path}
 - Output Format: {output_type}
 
 CRITICAL API RULES:
