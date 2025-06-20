@@ -136,7 +136,6 @@ if current_view == "uploader":
                 st.session_state.app_state['data_path'] = task_yaml_path[:-10]
             else:
                 # Reuse previous extraction
-                extract_dir = prev_sample_folder
                 task_yaml_path = st.session_state.app_state.get('task_yaml_path')
                 task_yaml = st.session_state.app_state.get('task_yaml')
                 abs_task_yaml_path = st.session_state.app_state.get('task_yaml_path')
